@@ -1,0 +1,12 @@
+<!--pages/bleteset/bletest.wxml-->
+<text>{{repdata}}</text>
+<view bindtap='connect' data-item='{{item[0]}}'  class='rowlayout' wx:for="{{device}}" wx:key="{{index}}">
+    <text>{{item[0].deviceId}}</text>
+     <text>{{item[0].RSSI}}</text>
+    <text>{{item[0].name}}</text>
+</view>
+
+<view> 
+ <button bindtap='send'>点击</button>
+  <button bindtap='dis'>断开</button>
+</view>

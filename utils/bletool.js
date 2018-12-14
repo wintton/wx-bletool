@@ -9,8 +9,9 @@
         deviceId: data.connectedDeviceId,
         success: function (res) { 
           for (var i = 0; i < res.services.length; i++) {
-            if (res.services[i].uuid.indexOf("0000FFF0") != -1) { 
-              data.services = res.services[i].uuid;
+          
+            if (res.services[i].uuid.indexOf("6E400001-B5A3-F393-E0A9-E50E24DCCA9E") != -1) { 
+              data.services = res.services[i].uuid; 
               getChar(re);
             }
           }
@@ -35,6 +36,7 @@
     isOpenadatper:false,   //是否初始化蓝牙适配器
     connectStatus: false ,   //连接状态
     onNotifyChange:function () {},
+    mTimeOut:{}         //扫描Timeout对象
   }
 
 function ab2hex(buffer) {
@@ -45,6 +47,15 @@ function ab2hex(buffer) {
     }
   )
   return hexArr.join('');
+}
+function hex2str(str) {
+  var len = str.length / 2;
+  var result = "";
+  for (var i = 0; i < len; i++){
+    let data = str.substring(i * 2, i * 2 + 2);
+    result+= String.fromCharCode(parseInt(data,16));
+  }
+  return result;
 }
 function strToHexCharCode(str) {
   if (str === "")
@@ -65,11 +76,12 @@ function opennotify(notify_id, re){
     characteristicId: notify_id,
     success: function (res) {
       console.log('notifyBLECharacteristicValueChange success', res.errMsg)
-
-
+ 
       wx.onBLECharacteristicValueChange(function (res) {
         let msg = ab2hex(res.value);
-        res.value.strData = msg;
+        let str = hex2str(msg);
+        res.value.strHexData = msg;
+        res.value.strData = str; 
         console.log(res);
         re(res);//接受消息  
       })
@@ -94,7 +106,7 @@ function getChar(re){
         if (charc.properties.read) {
           read_id = charc.uuid;
         }
-      } 
+      }   
       if (notify_id != null && write_id != null) {
         data.notifyCharacteristicsId = notify_id;
         data.writeCharacteristicsId = write_id;
@@ -191,9 +203,9 @@ class bletool{
   * 开始扫描
   *@parameter getDevCb - 发现设备回调   endTime 扫描结束时间
   *@return info{return_code:"0",msg:"",rep:{}} 
-  *return_code 返回操作结果  msg - 返回操作信息 rep - 扫描到的蓝牙设备信息
+  *return_code 返回操作结果  msg - 返回操作信息 rep - 扫描到的蓝牙设备信息 infoFB- 返回操作信息
   */
-  startScanle(getDevCb,endTime){
+  startScanle(getDevCb,infoFB,endTime){
     var info = {
       return_code: "1",
       msg:"",
@@ -201,38 +213,49 @@ class bletool{
     }
     if(data.sousuo == 1){
       info.return_code = "1";
-      info.msg = "正在搜索中..."
+      info.msg = "正在搜索中...";
+      infoFB(info);
     }else{
       wx.startBluetoothDevicesDiscovery({
         success: function(res) {
+          data.sousuo = 1;
           info.return_code = "0";
           info.msg = "搜索成功"; 
+          infoFB(info);
           wx.onBluetoothDeviceFound(
-            function(res){
+            function(res){ 
               if (typeof getDevCb == "function"){
                 getDevCb(res);
              }
           })
         },
       })
-      setTimeout(function(res){
+      data.mTimeOut = setTimeout(function(res){
+        
         wx.stopBluetoothDevicesDiscovery({
           success: function (res) {
+            data.sousuo = 0;
+            info.return_code = "0";
+            info.msg = "扫描结束";
+            infoFB(info);
           },
           fail: function (res) {
           }
         }) 
       }, endTime);
-    }
-    return info;
+    } 
   }
   /**
    * 停止扫描
    * @return true  - 成功 false - 失败
    */
   stopScanle(){
+    if (data.sousuo == 1){
+      clearTimeout(data.mTimeOut);
+    }
     wx.stopBluetoothDevicesDiscovery({
       success: function(res) { 
+        data.sousuo = 0;
       },
       fail: function(res){ 
       }
@@ -240,10 +263,10 @@ class bletool{
   } 
   /**
    * 连接设备，连接超时时间3秒
-   * @parameter id - 设备id readCb - 设备接收数据回调
+   * @parameter id - 设备id readCb - 设备接收数据回调 suceeF -  连接成功与否回调
    * @return true  - 成功 false - 失败
    */
-  connect(id,readCb){   
+  connect(id,suceeF,readCb){   
     var info = {
       return_code: "1",
       msg: "" 
@@ -251,13 +274,14 @@ class bletool{
     if (data.connectStatus) {
       info.return_code = "1";
       info.msg = "当前已连接！"; 
+      suceeF(info);
     } else {
       wx.showLoading({
         title: '连接蓝牙设备中...',
       })
       wx.createBLEConnection({
         deviceId:id,
-        timeout:3000,
+        timeout:10000,
         success: function (res) {
           wx.hideLoading();
           data.connectStatus = true;
@@ -268,13 +292,12 @@ class bletool{
             duration: 1000
           })
           info.return_code = "0";
-          info.msg = "连接设备成功"; 
-          console.log("连接设备成功")
+          info.msg = "连接设备成功";  
           //获取服务 
           if (typeof readCb == "function") {
             Until.getBleService(readCb); 
-          }
-      
+          } 
+          suceeF(info);
         },
         fail: function (res) {
           wx.hideLoading()
@@ -284,14 +307,15 @@ class bletool{
             duration: 1000
           })
           info.return_code = "1";
-          info.msg = "连接设备失败"; 
-          console.log("连接设备失败")
+          info.msg = "连接设备失败";  
           console.log(res)
-          data.connectStatus = false;
+          data.connectStatus = false; 
+          suceeF(info);
         }
       })
       wx.stopBluetoothDevicesDiscovery({
         success: function (res) {
+          data.sousuo = 0;
           console.log("停止蓝牙搜索")
           console.log(res)
         }
@@ -341,7 +365,7 @@ class bletool{
    * 断开连接
    *@return info{return_code:"0",msg:""} return_code 返回操作结果  msg - 返回操作信息
    */
-  disconnect(){
+  disconnect(infoFb){
     var info = {
       return_code: "1",
       msg: ""  
@@ -350,20 +374,22 @@ class bletool{
       wx.closeBLEConnection({
         deviceId: data.connectedDeviceId,
         success: function(res) {
+          data.connectStatus = false;
           info.return_code = "0";
           info.msg = "断开成功";
+          infoFb(info);
         },
-      })
+      }) 
     }else{
       info.return_code = "1";
       info.msg = "未连接任何设备";
-    }
-    return info;
+      infoFb(info);
+    } 
   }
   /**
    * 关闭适配器
    */
-  close(){
+  close(infoFB){
     var info = {
       return_code: "1",
       msg: "关闭失败"
@@ -371,10 +397,13 @@ class bletool{
     wx.closeBluetoothAdapter({
       success: function(res) {
         info.return_code = "0";
-        info.msg = "关闭成功！"
+        info.msg = "关闭成功！";
+        infoFB(info);
       },
-    })
-    return info;
+      fail:function(res){
+        infoFB(info);
+      }
+    }) 
   } 
 }
 module.exports = bletool;

@@ -5,7 +5,13 @@ App({
     var logs = wx.getStorageSync('logs') || []
     logs.unshift(Date.now())
     wx.setStorageSync('logs', logs)
-
+    var that = this;
+    wx.getSystemInfo({
+      success: function (res) {
+        that.globalData.width = res.windowWidth;
+        that.globalData.height = res.windowHeight;
+      },
+    })
     // 登录
     wx.login({
       success: res => {
@@ -34,6 +40,8 @@ App({
     })
   },
   globalData: {
-    userInfo: null
+    userInfo: null,
+    width:"",
+    height:""
   }
 })

@@ -1,18 +1,20 @@
 /**
  * 蓝牙集成 插件
- * 2018-09-13  wintton 
+ * 2018-09-13  wintton 周文强
+ * 成都谱讯科技
  */ 
 
   var Until = {  
     getBleService(re) {
       wx.getBLEDeviceServices({ 
         deviceId: data.connectedDeviceId,
-        success: function (res) { 
-          for (var i = 0; i < res.services.length; i++) {
-          
-            if (res.services[i].uuid.indexOf("6E400001-B5A3-F393-E0A9-E50E24DCCA9E") != -1) { 
+        success: function (res) {  
+          for (var i = 0; i < res.services.length; i++) { 
+            //修改需要要的uuid
+            if (res.services[i].uuid.indexOf(data.uuid) != -1) { 
               data.services = res.services[i].uuid; 
               getChar(re);
+              break;
             }
           }
         }
@@ -20,6 +22,7 @@
     },    
   }
   var data = {
+    uuid:"FFF0",//FFE0
     status: 0, //可用状态 1 - 可用 0 - 不可用
     sousuo: 0, //搜索状态 1 - 搜索中  0 - 为搜索
     connectedDeviceId: "", //已连接设备uuid
@@ -40,6 +43,9 @@
   }
 
 function ab2hex(buffer) {
+  if(!buffer){
+    return "";
+  }
   var hexArr = Array.prototype.map.call(
     new Uint8Array(buffer),
     function (bit) {
@@ -95,6 +101,7 @@ function getChar(re){
     serviceId: data.services,
     success: function (res) {
       let notify_id, write_id, read_id;
+      
       for (let i = 0; i < res.characteristics.length; i++) {
         let charc = res.characteristics[i];
         if (charc.properties.notify) {
@@ -126,10 +133,22 @@ class bletool{
   constructor() {
   }
   /**
+   * 设置uuid
+   */
+  setUUID(uuid){
+    data.uuid = uuid;
+  }
+  /**
    * 获得蓝牙适配器状态
    */
   getAdapterStatus(){ 
     return data.isOpenadatper;
+  }
+  /**
+   * 获得蓝牙连接状态
+   */
+  getdevConStatus() {
+    return data.connectStatus;
   }
   /**
    * 初始化蓝牙
@@ -203,9 +222,9 @@ class bletool{
   * 开始扫描
   *@parameter getDevCb - 发现设备回调   endTime 扫描结束时间
   *@return info{return_code:"0",msg:"",rep:{}} 
-  *return_code 返回操作结果  msg - 返回操作信息 rep - 扫描到的蓝牙设备信息 infoFB- 返回操作信息
+  *return_code 返回操作结果  msg - 返回操作信息 rep - 扫描到的蓝牙设备信息 infoFB- 返回操作信息  isduplica - 是否搜索重复设备
   */
-  startScanle(getDevCb,infoFB,endTime){
+  startScanle(getDevCb,infoFB,endTime,isduplica){
     var info = {
       return_code: "1",
       msg:"",
@@ -217,6 +236,7 @@ class bletool{
       infoFB(info);
     }else{
       wx.startBluetoothDevicesDiscovery({
+        allowDuplicatesKey: isduplica,
         success: function(res) {
           data.sousuo = 1;
           info.return_code = "0";
@@ -225,6 +245,9 @@ class bletool{
           wx.onBluetoothDeviceFound(
             function(res){ 
               if (typeof getDevCb == "function"){
+                for (var x in res.devices) {
+                  res.devices[x].hexdata = ab2hex(res.devices[x].advertisData);
+                } 
                 getDevCb(res);
              }
           })
@@ -301,11 +324,7 @@ class bletool{
         },
         fail: function (res) {
           wx.hideLoading()
-          wx.showToast({
-            title: '连接设备失败',
-            icon: 'success',
-            duration: 1000
-          })
+        
           info.return_code = "1";
           info.msg = "连接设备失败";  
           console.log(res)
@@ -324,36 +343,44 @@ class bletool{
     return info;
   }
   /**
-   *像蓝牙涉笔蓝牙发送数据
-   * msg - 发送的消息   sendab  - 发送结果回调
+   *像蓝牙设备蓝牙发送数据
+   * msg - 发送的消息   sendab  - 发送结果回调  ishex - 是否是hex字符串
    */
-  sendMsg(msg,sendab) { 
+  sendMsg(msg,sendab,ishex) { 
     var info = {
       return_code: "1",
       msg: "发送失败！"
     } 
-    var hexs = strToHexCharCode(msg);
-  var typedArray = new Uint8Array(hexs.match(/[\da-f]{2}/gi).map(function (h) {
-    return parseInt(h, 16);
-  }));
-  var buffer1 = typedArray.buffer;
-
+    if(msg == ""){
+      sendab(info);
+    }
+    var hexs = ""; 
+    if(ishex){
+      hexs = msg; 
+    } else {
+     hexs = strToHexCharCode(msg); 
+    }  
+    var  typedArray = new Uint8Array(hexs.match(/[\da-f]{2}/gi).map(function (h) {
+      return parseInt(h, 16);
+    }));
+    var buffer = typedArray.buffer;
+  
+    
   wx.writeBLECharacteristicValue({
     deviceId:  data.connectedDeviceId,
     serviceId:  data.services,
     characteristicId: data.writeCharacteristicsId,
-    value: buffer1,
+    value: buffer,
     success: function (res) {
       info.return_code = "0";
       info.msg = "发送成功";
+      console.log(res);
       if (typeof sendab == "function"){
         sendab(info);
-      }
-      wx.showToast({
-        title: '发送成功',
-      })
+      } 
     },
     fail:function(res){
+      console.log(res);
       if (typeof sendab == "function") {
         sendab(info);
       }

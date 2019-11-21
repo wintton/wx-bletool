@@ -79,5 +79,4 @@ return_code 为0时为操作成功，msg为具体信息</p>
       bleUtil.close();
     }
 ```
-
-[我把代码放到github上面的，bletool.js在utils包下，点击就可以过去了,得切换下分支，我没放在master里](https://github.com/wintton/wx-bletool.git)
+<p>2019年05月23日 新增接收数据返回hex格式和字符串格式，扫描返回的结果里增加了一个对广播包进行处理后的hexvalue，可自定义uuid,调用方法setUUid（）；即可</p>
